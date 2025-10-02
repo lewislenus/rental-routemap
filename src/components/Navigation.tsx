@@ -1,8 +1,11 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Car, User, LayoutDashboard } from "lucide-react";
+import { Car, User, LayoutDashboard, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Navigation = () => {
+  const { user, signOut } = useAuth();
+
   return (
     <nav className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4">
@@ -26,17 +29,30 @@ const Navigation = () => {
                 For Providers
               </Button>
             </Link>
-            <Link to="/account">
-              <Button variant="ghost" size="sm">
-                <User className="h-4 w-4 mr-2" />
-                Account
-              </Button>
-            </Link>
-            <Link to="/auth">
-              <Button variant="hero" size="sm">
-                Sign In
-              </Button>
-            </Link>
+            {user ? (
+              <>
+                <Link to="/account">
+                  <Button variant="ghost" size="sm">
+                    <User className="h-4 w-4 mr-2" />
+                    Account
+                  </Button>
+                </Link>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={signOut}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Link to="/auth">
+                <Button variant="hero" size="sm">
+                  Sign In
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navigation from "@/components/Navigation";
 import { Button } from "@/components/ui/button";
@@ -7,35 +7,120 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { mockCars } from "@/lib/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { CreditCard, User, Mail, Phone, MapPin } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const Booking = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const car = mockCars.find((c) => c.id === id);
+  const { user } = useAuth();
+  const [car, setCar] = useState<any>(null);
   const [agreed, setAgreed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    pickupLocation: "",
+    pickupDate: "",
+    dropoffDate: "",
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+    fetchCar();
+  }, [id, user, navigate]);
+
+  const fetchCar = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("cars")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+      setCar(data);
+    } catch (error: any) {
+      toast({
+        title: "Error loading car",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!agreed) {
       toast({
         title: "Terms Required",
         description: "Please agree to the terms and conditions",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
-    
-    toast({
-      title: "Booking Confirmed!",
-      description: "Check your email for confirmation details",
-    });
-    
-    setTimeout(() => navigate("/account"), 1500);
+
+    if (!user || !car) return;
+
+    try {
+      const days = Math.ceil(
+        (new Date(formData.dropoffDate).getTime() - new Date(formData.pickupDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+      const totalPrice = Number(car.price_per_day) * days;
+
+      const { error } = await supabase.from("bookings").insert({
+        user_id: user.id,
+        car_id: car.id,
+        pickup_location: formData.pickupLocation,
+        pickup_date: formData.pickupDate,
+        dropoff_date: formData.dropoffDate,
+        total_price: totalPrice,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Booking Confirmed!",
+        description: "Check your account for booking details",
+      });
+
+      setTimeout(() => navigate("/account"), 1500);
+    } catch (error: any) {
+      toast({
+        title: "Booking Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <div className="container mx-auto px-4 py-16 text-center">
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!car) {
     return (
@@ -49,9 +134,14 @@ const Booking = () => {
     );
   }
 
-  const days = 3;
-  const baseTotal = car.price * days;
-  const insurance = car.insurance * days;
+  const days = formData.pickupDate && formData.dropoffDate
+    ? Math.ceil(
+        (new Date(formData.dropoffDate).getTime() - new Date(formData.pickupDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      )
+    : 3;
+  const baseTotal = Number(car.price_per_day) * days;
+  const insurance = 15 * days;
   const taxes = 25;
   const total = baseTotal + insurance + taxes;
 
@@ -64,7 +154,6 @@ const Booking = () => {
 
         <div className="grid lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
-            {/* Personal Information */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -77,11 +166,21 @@ const Booking = () => {
                   <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
-                      <Input id="firstName" required />
+                      <Input
+                        id="firstName"
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        required
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Last Name</Label>
-                      <Input id="lastName" required />
+                      <Input
+                        id="lastName"
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                        required
+                      />
                     </div>
                   </div>
 
@@ -89,7 +188,14 @@ const Booking = () => {
                     <Label htmlFor="email">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input id="email" type="email" className="pl-10" required />
+                      <Input
+                        id="email"
+                        type="email"
+                        className="pl-10"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        required
+                      />
                     </div>
                   </div>
 
@@ -97,22 +203,57 @@ const Booking = () => {
                     <Label htmlFor="phone">Phone Number</Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input id="phone" type="tel" className="pl-10" required />
+                      <Input
+                        id="phone"
+                        type="tel"
+                        className="pl-10"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        required
+                      />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="address">Pickup Address</Label>
+                    <Label htmlFor="pickupLocation">Pickup Location</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input id="address" className="pl-10" required />
+                      <Input
+                        id="pickupLocation"
+                        className="pl-10"
+                        value={formData.pickupLocation}
+                        onChange={(e) => setFormData({ ...formData, pickupLocation: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="pickupDate">Pickup Date</Label>
+                      <Input
+                        id="pickupDate"
+                        type="date"
+                        value={formData.pickupDate}
+                        onChange={(e) => setFormData({ ...formData, pickupDate: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dropoffDate">Drop-off Date</Label>
+                      <Input
+                        id="dropoffDate"
+                        type="date"
+                        value={formData.dropoffDate}
+                        onChange={(e) => setFormData({ ...formData, dropoffDate: e.target.value })}
+                        required
+                      />
                     </div>
                   </div>
                 </form>
               </CardContent>
             </Card>
 
-            {/* Payment Information */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -123,32 +264,36 @@ const Booking = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="cardNumber">Card Number</Label>
-                  <Input id="cardNumber" placeholder="1234 5678 9012 3456" required />
+                  <Input id="cardNumber" placeholder="1234 5678 9012 3456" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="expiry">Expiry Date</Label>
-                    <Input id="expiry" placeholder="MM/YY" required />
+                    <Input id="expiry" placeholder="MM/YY" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="cvv">CVV</Label>
-                    <Input id="cvv" placeholder="123" required />
+                    <Input id="cvv" placeholder="123" />
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-4">
-                  <Checkbox id="terms" checked={agreed} onCheckedChange={(checked) => setAgreed(!!checked)} />
+                  <Checkbox
+                    id="terms"
+                    checked={agreed}
+                    onCheckedChange={(checked) => setAgreed(!!checked)}
+                  />
                   <label htmlFor="terms" className="text-sm cursor-pointer">
                     I agree to the terms and conditions and rental agreement
                   </label>
                 </div>
 
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   onClick={handleSubmit}
-                  className="w-full" 
-                  size="lg" 
+                  className="w-full"
+                  size="lg"
                   variant="hero"
                   disabled={!agreed}
                 >
@@ -158,7 +303,6 @@ const Booking = () => {
             </Card>
           </div>
 
-          {/* Order Summary */}
           <div className="lg:sticky lg:top-24 h-fit">
             <Card>
               <CardHeader>
@@ -166,11 +310,15 @@ const Booking = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex gap-4">
-                  <img src={car.image} alt={car.name} className="w-24 h-24 object-cover rounded-lg" />
+                  <img
+                    src={car.image_url || "/placeholder.svg"}
+                    alt={car.name}
+                    className="w-24 h-24 object-cover rounded-lg"
+                  />
                   <div>
                     <h3 className="font-semibold">{car.name}</h3>
-                    <p className="text-sm text-muted-foreground">{car.provider}</p>
-                    <p className="text-sm text-muted-foreground">{car.type}</p>
+                    <p className="text-sm text-muted-foreground">{car.brand} {car.model}</p>
+                    <p className="text-sm text-muted-foreground">{car.location}</p>
                   </div>
                 </div>
 
@@ -200,7 +348,9 @@ const Booking = () => {
 
                 <div className="bg-secondary/50 rounded-lg p-4 text-sm space-y-1">
                   <p className="font-medium">Free cancellation</p>
-                  <p className="text-muted-foreground">Cancel up to 48 hours before pickup for a full refund</p>
+                  <p className="text-muted-foreground">
+                    Cancel up to 48 hours before pickup for a full refund
+                  </p>
                 </div>
               </CardContent>
             </Card>
