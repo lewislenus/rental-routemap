@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Car } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +22,7 @@ const Auth = () => {
   const [signupPassword, setSignupPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [isProvider, setIsProvider] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -55,7 +57,7 @@ const Auth = () => {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await signUp(signupEmail, signupPassword, firstName, lastName);
+    const { error } = await signUp(signupEmail, signupPassword, firstName, lastName, isProvider);
     
     if (error) {
       toast({
@@ -66,9 +68,9 @@ const Auth = () => {
     } else {
       toast({
         title: "Account created!",
-        description: "Welcome to DriveHub.",
+        description: isProvider ? "Welcome to DriveHub. You can now add cars to rent." : "Welcome to DriveHub.",
       });
-      navigate("/account");
+      navigate(isProvider ? "/admin" : "/account");
     }
     
     setIsLoading(false);
@@ -181,6 +183,16 @@ const Auth = () => {
                         onChange={(e) => setSignupPassword(e.target.value)}
                         required 
                       />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="isProvider" 
+                        checked={isProvider}
+                        onCheckedChange={(checked) => setIsProvider(checked as boolean)}
+                      />
+                      <Label htmlFor="isProvider" className="text-sm font-normal cursor-pointer">
+                        I'm a car rental provider
+                      </Label>
                     </div>
                     <Button type="submit" className="w-full" variant="hero" disabled={isLoading}>
                       {isLoading ? "Creating account..." : "Create Account"}
